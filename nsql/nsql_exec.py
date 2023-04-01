@@ -12,15 +12,17 @@ class Executor(object):
         self.qa_model = OpenAIQAModel(args, keys)
 
     def generate_new_col_names(self, number):
-        col_names = ["col_{}".format(i) for i in range(self.new_col_name_id, self.new_col_name_id + number)]
+        col_names = [
+            f"col_{i}"
+            for i in range(self.new_col_name_id, self.new_col_name_id + number)
+        ]
         self.new_col_name_id += number
         return col_names
 
     def sql_exec(self, sql: str, db: NeuralDB, verbose=True):
         if verbose:
-            print("Exec SQL '{}' with additional row_id on {}".format(sql, db))
-        result = db.execute_query(sql)
-        return result
+            print(f"Exec SQL '{sql}' with additional row_id on {db}")
+        return db.execute_query(sql)
 
     def nsql_exec(self, nsql: str, db: NeuralDB, verbose=True):
         steps = []
@@ -54,34 +56,40 @@ class Executor(object):
                             "rows": [["0", val]]
                         })
                     elif role == 'passage_title_and_image_title':
-                        sql_executed_sub_tables.append({
-                            "header": ["row_id", "{}".format(sql_item)],
-                            "rows": [["0", db.get_passage_by_title(sql_item) +
-                                      db.get_image_caption_by_title(sql_item)
-                                      # "{} (The answer of '{}' is {})".format(
-                                      #     sql_item,
-                                      #     # Add image qa result as backup info
-                                      #     question[len("***@"):],
-                                      #     vqa_call(question=question[len("***@"):],
-                                      #              image_path=db.get_image_by_title(sql_item)))
-                                      ]]
-                        })
+                        sql_executed_sub_tables.append(
+                            {
+                                "header": ["row_id", f"{sql_item}"],
+                                "rows": [
+                                    [
+                                        "0",
+                                        db.get_passage_by_title(sql_item)
+                                        + db.get_image_caption_by_title(sql_item)
+                                        # "{} (The answer of '{}' is {})".format(
+                                        #     sql_item,
+                                        #     # Add image qa result as backup info
+                                        #     question[len("***@"):],
+                                        #     vqa_call(question=question[len("***@"):],
+                                        #              image_path=db.get_image_by_title(sql_item)))
+                                    ]
+                                ],
+                            }
+                        )
                     elif role == 'passage_title':
-                        sql_executed_sub_tables.append({
-                            "header": ["row_id", "{}".format(sql_item)],
-                            "rows": [["0", db.get_passage_by_title(sql_item)]]
-                        })
+                        sql_executed_sub_tables.append(
+                            {
+                                "header": ["row_id", f"{sql_item}"],
+                                "rows": [["0", db.get_passage_by_title(sql_item)]],
+                            }
+                        )
                     elif role == 'image_title':
-                        sql_executed_sub_tables.append({
-                            "header": ["row_id", "{}".format(sql_item)],
-                            "rows": [["0", db.get_image_caption_by_title(sql_item)]],
-                            # "rows": [["0", "{} (The answer of '{}' is {})".format(
-                            #         sql_item,
-                            #         # Add image qa result as backup info
-                            #         question[len("***@"):],
-                            #         vqa_call(question=question[len("***@"):],
-                            #                  image_path=db.get_image_by_title(sql_item)))]],
-                        })
+                        sql_executed_sub_tables.append(
+                            {
+                                "header": ["row_id", f"{sql_item}"],
+                                "rows": [
+                                    ["0", db.get_image_caption_by_title(sql_item)]
+                                ],
+                            }
+                        )
 
                 # If the sub_tables to execute with link, append it to the cell.
                 passage_linker = db.get_passage_linker()
@@ -91,21 +99,14 @@ class Executor(object):
                         for j in range(len(_sql_executed_sub_table['rows'][i])):
                             _cell = _sql_executed_sub_table['rows'][i][j]
                             if _cell in passage_linker.keys():
-                                _sql_executed_sub_table['rows'][i][j] += " ({})".format(
-                                    # Add passage text as backup info
-                                    db.get_passage_by_title(passage_linker[_cell]))
+                                _sql_executed_sub_table['rows'][i][
+                                    j
+                                ] += f" ({db.get_passage_by_title(passage_linker[_cell])})"
 
                             if _cell in image_linker.keys():
-                                _sql_executed_sub_table['rows'][i][j] += " ({})".format(
-                                    # Add image caption as backup info
-                                    db.get_image_caption_by_title(image_linker[_cell]))
-                                # _sql_executed_sub_table['rows'][i][j] += " (The answer of '{}' is {})".format(
-                                #     # Add image qa result as backup info
-                                #     question[len("***@"):],
-                                #     vqa_call(question=question[len("***@"):],
-                                #              image_path=db.get_image_by_title(image_linker[_cell])))
-                                pass
-
+                                _sql_executed_sub_table['rows'][i][
+                                    j
+                                ] += f" ({db.get_image_caption_by_title(image_linker[_cell])})"
                 if question.lower().startswith("map@"):
                     # When the question is a type of mapping, we return the mapped column.
                     question = question[len("map@"):]
@@ -120,12 +121,14 @@ class Executor(object):
                         db.add_sub_table(sub_table, verbose=verbose)
                         col_idx += 1
                     else:  # This step is the final step
-                        sub_table: Dict = self.qa_model.qa(question,
-                                                           sql_executed_sub_tables,
-                                                           table_title=db.table_title,
-                                                           qa_type="map",
-                                                           new_col_name_s=["col_{}".format(col_idx)],
-                                                           verbose=verbose)
+                        sub_table: Dict = self.qa_model.qa(
+                            question,
+                            sql_executed_sub_tables,
+                            table_title=db.table_title,
+                            qa_type="map",
+                            new_col_name_s=[f"col_{col_idx}"],
+                            verbose=verbose,
+                        )
                         return extract_answers(sub_table)
 
                 elif question.lower().startswith("ans@"):
@@ -142,8 +145,8 @@ class Executor(object):
                         return answer
                 else:
                     raise ValueError(
-                        "Except for operators or NL question must start with 'map@' or 'ans@'!, check '{}'".format(
-                            question))
+                        f"Except for operators or NL question must start with 'map@' or 'ans@'!, check '{question}'"
+                    )
 
             else:
                 sub_table = self.sql_exec(nsql, db, verbose=verbose)

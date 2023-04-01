@@ -22,20 +22,19 @@ class OpenAIQARetriever(object):
         BLEU score.
         """
         q1, q2 = normalize(q1), normalize(q2)
-        reference = [[tk for tk in nltk.word_tokenize(q1)]]
-        candidate = [tk for tk in nltk.word_tokenize(q2)]
+        reference = [list(nltk.word_tokenize(q1))]
+        candidate = list(nltk.word_tokenize(q2))
         if stemmer is not None:
             reference = [[stemmer.stem(tk) for tk in reference[0]]]
             candidate = [stemmer.stem(tk) for tk in candidate]
 
         chencherry_smooth = SmoothingFunction()  # bleu smooth to avoid hard behaviour when no ngram overlaps
-        bleu_score = sentence_bleu(
+        return sentence_bleu(
             reference,
             candidate,
             weights=(0.25, 0.3, 0.3, 0.15),
-            smoothing_function=chencherry_smooth.method1
+            smoothing_function=chencherry_smooth.method1,
         )
-        return bleu_score
 
     def _qh2qh_similarity(
             self,
@@ -83,13 +82,12 @@ class OpenAIQARetriever(object):
         Retrieve a list of relevant QA samples.
         """
         if method == 'qh2qh_bleu':
-            retrieved_items = self._qh2qh_similarity(
+            return self._qh2qh_similarity(
                 item=item,
                 num_retrieve_samples=num_shots,
                 score_func='bleu',
                 qa_type=qa_type,
-                verbose=verbose
+                verbose=verbose,
             )
-            return retrieved_items
         else:
             raise ValueError(f'Retrieve method {method} is not supported.')

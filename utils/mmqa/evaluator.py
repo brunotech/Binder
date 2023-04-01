@@ -103,7 +103,7 @@ assert set(SINGLE_HOP_QUESTION_TYPES + MULTI_HOP_QUESTION_TYPES) == set(ALL_QUES
 
 
 def process_question_for_implicit_decomp(question, question_type, hop=0, bridge_entity='', sep_token='[SEP]'):
-    if isinstance(bridge_entity, list) or isinstance(bridge_entity, set):
+    if isinstance(bridge_entity, (list, set)):
         bridge_entity = "; ".join(bridge_entity)
     return (
         f'{question_type} {sep_token} '
@@ -148,10 +148,11 @@ EXCLUDE = set(string.punctuation)
 
 
 def _remove_punc(text: str) -> str:
-    if not _is_number(text):
-        return "".join(ch for ch in text if ch not in EXCLUDE)
-    else:
-        return text
+    return (
+        text
+        if _is_number(text)
+        else "".join(ch for ch in text if ch not in EXCLUDE)
+    )
 
 
 def _lower(text: str) -> str:
@@ -170,8 +171,7 @@ def _normalize_answer(text: str) -> str:
         for token in _tokenize(text)
     ]
     parts = [part for part in parts if part.strip()]
-    normalized = " ".join(parts).strip()
-    return normalized
+    return " ".join(parts).strip()
 
 
 def _is_number(text: str) -> bool:
@@ -203,10 +203,7 @@ def _normalize_number(text: str) -> str:
 def _answer_to_bags(
     answer: Union[str, List[str], Tuple[str, ...]]
 ) -> Tuple[List[str], List[Set[str]]]:
-    if isinstance(answer, (list, tuple)):
-        raw_spans = answer
-    else:
-        raw_spans = [answer]
+    raw_spans = answer if isinstance(answer, (list, tuple)) else [answer]
     normalized_spans: List[str] = []
     token_bags = []
     for raw_span in raw_spans:
@@ -236,34 +233,19 @@ def _align_bags(predicted: List[Set[str]], gold: List[Set[str]]) -> List[float]:
 
 def _compute_f1(predicted_bag: Set[str], gold_bag: Set[str]) -> float:
     intersection = len(gold_bag.intersection(predicted_bag))
-    if not predicted_bag:
-        precision = 1.0
-    else:
-        precision = intersection / float(len(predicted_bag))
-    if not gold_bag:
-        recall = 1.0
-    else:
-        recall = intersection / float(len(gold_bag))
-    f1 = (
+    precision = intersection / float(len(predicted_bag)) if predicted_bag else 1.0
+    recall = intersection / float(len(gold_bag)) if gold_bag else 1.0
+    return (
         (2 * precision * recall) / (precision + recall)
-        if not (precision == 0.0 and recall == 0.0)
+        if precision != 0.0 or recall != 0.0
         else 0.0
     )
-    return f1
 
 
 def _match_numbers_if_present(gold_bag: Set[str], predicted_bag: Set[str]) -> bool:
-    gold_numbers = set()
-    predicted_numbers = set()
-    for word in gold_bag:
-        if _is_number(word):
-            gold_numbers.add(word)
-    for word in predicted_bag:
-        if _is_number(word):
-            predicted_numbers.add(word)
-    if (not gold_numbers) or gold_numbers.intersection(predicted_numbers):
-        return True
-    return False
+    gold_numbers = {word for word in gold_bag if _is_number(word)}
+    predicted_numbers = {word for word in predicted_bag if _is_number(word)}
+    return bool((not gold_numbers) or gold_numbers.intersection(predicted_numbers))
 
 
 
@@ -306,9 +288,7 @@ def evaluate_predictions(predictions, gold_answers, example_types=None):
         ref_answers = gold_answers[qas_id]
         if qas_id not in predictions:
             print(f"Missing prediction for question {qas_id}, and all scores for this question are set to zero")
-            instance_eval_results[qas_id] = {
-                metric: 0.0 for metric in eval_funcs.keys()
-            }
+            instance_eval_results[qas_id] = {metric: 0.0 for metric in eval_funcs}
         else:
             pred_answer = predictions[qas_id]
             instance_eval_results[qas_id] = {
@@ -322,15 +302,26 @@ def evaluate_predictions(predictions, gold_answers, example_types=None):
                 instance_eval_results_by_types[example_type] = {}
             instance_eval_results_by_types[example_type][qas_id] = instance_eval_results[qas_id]
 
-    eval_scores = {metric: np.mean([result[metric] for result in instance_eval_results.values()])
-                   for metric in eval_funcs.keys()}
+    eval_scores = {
+        metric: np.mean(
+            [result[metric] for result in instance_eval_results.values()]
+        )
+        for metric in eval_funcs
+    }
 
     if example_types is not None:
-        eval_scores_by_types = {}
-        for example_type, type_instance_eval_results in instance_eval_results_by_types.items():
-            eval_scores_by_types[example_type] = {
-                metric: np.mean([result[metric] for result in type_instance_eval_results.values()]) for metric in eval_funcs.keys()
+        eval_scores_by_types = {
+            example_type: {
+                metric: np.mean(
+                    [
+                        result[metric]
+                        for result in type_instance_eval_results.values()
+                    ]
+                )
+                for metric in eval_funcs
             }
+            for example_type, type_instance_eval_results in instance_eval_results_by_types.items()
+        }
         return eval_scores, instance_eval_results, eval_scores_by_types
     else:
         return eval_scores, instance_eval_results
@@ -348,7 +339,7 @@ def evaluate_prediction_file(prediction_path, gold_path):
         # So, we will use an outer bracket here to pretend we have a list of ref answers.
         gold_answer = [str(item["answer"]) for item in example["answers"]]
         gold_answers[qid] = [gold_answer]
-        answer_modality = set([item["modality"] for item in example["answers"]])
+        answer_modality = {item["modality"] for item in example["answers"]}
         assert len(answer_modality) == 1
         answer_modalities[qid] = answer_modality.pop()
         question_types[qid] = example["metadata"]["type"]
@@ -392,17 +383,13 @@ class EvaluateTool(object):
     self.args = args
 
   def evaluate(self, preds, golds, section):
-    summary = {}
+      gold_answers, predicted_answers = {}, {}
+      for pred, gold in zip(preds, golds):
+        qid = gold["id"]
+        gold_answer = [item.strip() for item in gold["answer_text"].split("|")]
+        gold_answers[qid] = [gold_answer]
+        predicted_answers[qid] = [item.strip() for item in pred.split("|")]
 
-    gold_answers, predicted_answers = {}, {}
-    for pred, gold in zip(preds, golds):
-      qid = gold["id"]
-      gold_answer = [item.strip() for item in gold["answer_text"].split("|")]
-      gold_answers[qid] = [gold_answer]
-      predicted_answers[qid] = [item.strip() for item in pred.split("|")]
+      eval_scores, instance_eval_results = evaluate_predictions(predicted_answers, gold_answers)
 
-    eval_scores, instance_eval_results = evaluate_predictions(predicted_answers, gold_answers)
-
-    for metric, value in eval_scores.items():
-        summary[metric] = value
-    return summary
+      return dict(eval_scores.items())

@@ -26,17 +26,22 @@ class TreeNode(object):
         child.father = self
 
     def rename_father_col(self, col_idx: int, col_prefix: str = "col_"):
-        new_col_name = "{}{}".format(col_prefix, col_idx)
-        self.father.rename = self.father.rename.replace(self.name, "{}".format(new_col_name))
+        new_col_name = f"{col_prefix}{col_idx}"
+        self.father.rename = self.father.rename.replace(self.name, f"{new_col_name}")
         self.produced_col_name_s = [new_col_name]  # fixme when multiple outputs for a qa func
 
     def rename_father_val(self, val_names):
         if len(val_names) == 1:
             val_name = val_names[0]
-            new_val_equals_str = "'{}'".format(val_name) if isinstance(convert_type(val_name), str) else "{}".format(
-                val_name)
+            new_val_equals_str = (
+                f"'{val_name}'"
+                if isinstance(convert_type(val_name), str)
+                else f"{val_name}"
+            )
         else:
-            new_val_equals_str = '({})'.format(', '.join(["'{}'".format(val_name) for val_name in val_names]))
+            new_val_equals_str = (
+                f"""({', '.join([f"'{val_name}'" for val_name in val_names])})"""
+            )
         self.father.rename = self.father.rename.replace(self.name, new_val_equals_str)
 
 
@@ -54,14 +59,18 @@ def get_cfg_tree(nsql: str):
     for idx in range(len(nsql)):
         if nsql[idx] == "(":
             stack.append(idx)
-            if idx > 1 and nsql[idx - 2:idx + 1] == "QA(" and idx - 2 != 0:
+            if idx > 1 and nsql[idx - 2 : idx + 1] == "QA(" and idx != 2:
                 tree_node = TreeNode()
                 current_tree_node.add_child(tree_node)
                 expression_stack.append(current_tree_node)
                 current_tree_node = tree_node
         elif nsql[idx] == ")":
             left_clause_idx = stack.pop()
-            if idx > 1 and nsql[left_clause_idx - 2:left_clause_idx + 1] == "QA(" and left_clause_idx - 2 != 0:
+            if (
+                idx > 1
+                and nsql[left_clause_idx - 2 : left_clause_idx + 1] == "QA("
+                and left_clause_idx != 2
+            ):
                 # the QA clause
                 nsql_span = nsql[left_clause_idx - 2:idx + 1]
                 current_tree_node.set_name(nsql_span)
@@ -80,8 +89,10 @@ def get_steps(tree_node: TreeNode, steps: List):
 def parse_question_paras(nsql: str, qa_model):
     # We assume there's no nested qa inside when running this func
     nsql = nsql.strip(" ;")
-    assert nsql[:3] == "QA(" and nsql[-1] == ")", "must start with QA( symbol and end with )"
-    assert not "QA" in nsql[2:-1],  "must have no nested qa inside"
+    assert (
+        nsql.startswith("QA(") and nsql[-1] == ")"
+    ), "must start with QA( symbol and end with )"
+    assert "QA" not in nsql[2:-1], "must have no nested qa inside"
 
     # Get question and the left part(paras_raw_str)
     all_quote_idx = [i.start() for i in re.finditer('\"', nsql)]
@@ -112,41 +123,34 @@ def nsql_role_recognize(nsql_like_str, all_headers, all_passage_titles, all_imag
     if nsql_like_str in all_headers or nsql_like_str in list(map(lambda x: x.lower(), all_headers)):
         return 'col', orig_nsql_like_str
 
-    # fixme: add case when the this nsql_like_str both in table headers, images title and in passages title.
-    # Case 2.1: if it is title of certain passage.
     if (nsql_like_str.lower() in list(map(lambda x: x.lower(), all_passage_titles))) \
             and (nsql_like_str.lower() in list(map(lambda x: x.lower(), all_image_titles))):
         return "passage_title_and_image_title", orig_nsql_like_str
-    else:
-        try:
-            nsql_like_str_evaled = str(eval(nsql_like_str))
-            if (nsql_like_str_evaled.lower() in list(map(lambda x: x.lower(), all_passage_titles))) \
-                    and (nsql_like_str_evaled.lower() in list(map(lambda x: x.lower(), all_image_titles))):
-                return "passage_title_and_image_title", nsql_like_str_evaled
-        except:
-            pass
+    try:
+        nsql_like_str_evaled = str(eval(nsql_like_str))
+        if (nsql_like_str_evaled.lower() in list(map(lambda x: x.lower(), all_passage_titles))) \
+                and (nsql_like_str_evaled.lower() in list(map(lambda x: x.lower(), all_image_titles))):
+            return "passage_title_and_image_title", nsql_like_str_evaled
+    except:
+        pass
 
-    # Case 2.2: if it is title of certain passage.
     if nsql_like_str.lower() in list(map(lambda x: x.lower(), all_passage_titles)):
         return "passage_title", orig_nsql_like_str
-    else:
-        try:
-            nsql_like_str_evaled = str(eval(nsql_like_str))
-            if nsql_like_str_evaled.lower() in list(map(lambda x: x.lower(), all_passage_titles)):
-                return "passage_title", nsql_like_str_evaled
-        except:
-            pass
+    try:
+        nsql_like_str_evaled = str(eval(nsql_like_str))
+        if nsql_like_str_evaled.lower() in list(map(lambda x: x.lower(), all_passage_titles)):
+            return "passage_title", nsql_like_str_evaled
+    except:
+        pass
 
-    # Case 2.3: if it is title of certain picture.
     if nsql_like_str.lower() in list(map(lambda x: x.lower(), all_image_titles)):
         return "image_title", orig_nsql_like_str
-    else:
-        try:
-            nsql_like_str_evaled = str(eval(nsql_like_str))
-            if nsql_like_str_evaled.lower() in list(map(lambda x: x.lower(), all_image_titles)):
-                return "image_title", nsql_like_str_evaled
-        except:
-            pass
+    try:
+        nsql_like_str_evaled = str(eval(nsql_like_str))
+        if nsql_like_str_evaled.lower() in list(map(lambda x: x.lower(), all_image_titles)):
+            return "image_title", nsql_like_str_evaled
+    except:
+        pass
 
     # Case 4: if it can be parsed by eval(), it is value type.
     try:
@@ -169,11 +173,10 @@ def extract_answers(sub_table):
     if not sub_table or sub_table['header'] is None:
         return []
     answer = []
-    if 'row_id' in sub_table['header']:
-        for _row in sub_table['rows']:
+    for _row in sub_table['rows']:
+        if 'row_id' in sub_table['header']:
             answer.extend(_row[1:])
-        return answer
-    else:
-        for _row in sub_table['rows']:
+        else:
             answer.extend(_row)
-        return answer
+
+    return answer

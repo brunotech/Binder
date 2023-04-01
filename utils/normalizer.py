@@ -48,22 +48,23 @@ def str_normalize(user_input, recognition_types=None):
         strs_to_replace = []
         idx_pairs = []
         for recognized in recognized_list:
-            if not recognition_type == 'datetime':
+            if recognition_type != 'datetime':
                 recognized_value = recognized.resolution['value']
                 if str(recognized_value).startswith("P"):
                     # if the datetime is a period:
                     continue
-                else:
-                    strs_to_replace.append(recognized_value)
-                    idx_pairs.append((recognized.start, recognized.end + 1))
+                strs_to_replace.append(recognized_value)
+                idx_pairs.append((recognized.start, recognized.end + 1))
             else:
-                if recognized.resolution:  # in some cases, this variable could be none.
-                    if len(recognized.resolution['values']) == 1:
-                        strs_to_replace.append(
-                            recognized.resolution['values'][0]['timex'])  # We use timex as normalization
-                        idx_pairs.append((recognized.start, recognized.end + 1))
+                if (
+                    recognized.resolution
+                    and len(recognized.resolution['values']) == 1
+                ):
+                    strs_to_replace.append(
+                        recognized.resolution['values'][0]['timex'])  # We use timex as normalization
+                    idx_pairs.append((recognized.start, recognized.end + 1))
 
-        if len(strs_to_replace) > 0:
+        if strs_to_replace:
             user_input = replace_by_idx_pairs(user_input, strs_to_replace, idx_pairs)
 
     if re.match("(.*)-(.*)-(.*) 00:00:00", user_input):
@@ -76,13 +77,14 @@ def prepare_df_for_neuraldb_from_table(table: Dict, add_row_id=True, normalize=T
     header, rows = table['header'], table['rows']
     if add_row_id and 'row_id' not in header:
         header = ["row_id"] + header
-        rows = [["{}".format(i)] + row for i, row in enumerate(rows)]
-    if normalize:
-        df = convert_df_type(pd.DataFrame(data=rows, columns=header), lower_case=lower_case)
-    else:
-        df = pd.DataFrame(data=rows, columns=header)
-
-    return df
+        rows = [[f"{i}"] + row for i, row in enumerate(rows)]
+    return (
+        convert_df_type(
+            pd.DataFrame(data=rows, columns=header), lower_case=lower_case
+        )
+        if normalize
+        else pd.DataFrame(data=rows, columns=header)
+    )
 
 
 def convert_df_type(df: pd.DataFrame, lower_case=True):
@@ -140,7 +142,7 @@ def convert_df_type(df: pd.DataFrame, lower_case=True):
             try:
                 float(cell_value)
             except Exception as e:
-                if not cell_value in [str(None), str(None).lower()]:
+                if cell_value not in [str(None), str(None).lower()]:
                     # None or none
                     all_number_flag = False
         if all_number_flag:
@@ -187,7 +189,7 @@ def convert_df_type(df: pd.DataFrame, lower_case=True):
             if lower_header in new_columns:
                 new_header, suffix = lower_header, 2
                 while new_header in new_columns:
-                    new_header = lower_header + '-' + str(suffix)
+                    new_header = f'{lower_header}-{str(suffix)}'
                     suffix += 1
                 new_columns.append(new_header)
             else:
@@ -219,11 +221,7 @@ def convert_df_type(df: pd.DataFrame, lower_case=True):
                 pass
 
         if float_able:
-            if int_able:
-                df[header] = df[header].astype(int)
-            else:
-                df[header] = df[header].astype(float)
-
+            df[header] = df[header].astype(int) if int_able else df[header].astype(float)
         # Recognize datetime type
         try:
             df[header].astype("datetime64")
@@ -321,8 +319,11 @@ def post_process_sql(sql_str, df, table_title=None, process_program_with_fuzzy_m
                 all_matched_of_this_header = finditer(header, sql_str)
                 for matched_of_this_header in all_matched_of_this_header:
                     start_idx, end_idx = matched_of_this_header
-                    if all(have_matched[start_idx: end_idx]) == 0 and (not sql_str[start_idx - 1] == "`") and (
-                            not sql_str[end_idx] == "`"):
+                    if (
+                        all(have_matched[start_idx:end_idx]) == 0
+                        and sql_str[start_idx - 1] != "`"
+                        and sql_str[end_idx] != "`"
+                    ):
                         have_matched[start_idx: end_idx] = [1 for _ in range(end_idx - start_idx)]
                         # a bit ugly, but anyway.
 
@@ -388,10 +389,9 @@ def post_process_sql(sql_str, df, table_title=None, process_program_with_fuzzy_m
             numbers_in_value = set(numbers_in_value)
             numbers_in_matched_cell = set(numbers_in_matched_cell)
 
-            if numbers_in_value.issubset(numbers_in_matched_cell) or numbers_in_matched_cell.issubset(numbers_in_value):
-                return True
-            else:
-                return False
+            return numbers_in_value.issubset(
+                numbers_in_matched_cell
+            ) or numbers_in_matched_cell.issubset(numbers_in_value)
 
         # Drop trailing '\n```', a pattern that may appear in Codex SQL generation
         sql_str = sql_str.rstrip('```').rstrip('\n')

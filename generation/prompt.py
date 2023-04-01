@@ -21,22 +21,21 @@ def _create_table_prompt(df: pd.DataFrame, title: str):
     """
     Return the CREATE TABLE clause as prompt.
     """
-    string = "CREATE TABLE {}(\n".format(title)
+    string = f"CREATE TABLE {title}(\n"
     for header in df.columns:
         column_type = 'text'
         try:
-            if df[header].dtype == 'int64':
-                column_type = 'int'
+            if df[header].dtype == 'datetime64':
+                column_type = 'datetime'
             elif df[header].dtype == 'float64':
                 column_type = 'real'
-            elif df[header].dtype == 'datetime64':
-                column_type = 'datetime'
+            elif df[header].dtype == 'int64':
+                column_type = 'int'
         except AttributeError as e:
             raise DuplicateColumnsError(e)
 
-        string += '\t{} {},\n'.format(header, column_type)
-    string = string.rstrip(',\n') + ')\n'
-    return string
+        string += f'\t{header} {column_type},\n'
+    return string.rstrip(',\n') + ')\n'
 
 
 class PromptBuilder(object):
@@ -53,16 +52,16 @@ class PromptBuilder(object):
         if self.prompt_style == 'create_table_select_full_table':
             string = '/*\nAll rows of the table:\nSELECT * FROM w;\n'
         elif self.prompt_style == 'create_table_select_3':
-            string = '/*\n{} example rows:\nSELECT * FROM w LIMIT {};\n'.format(num_rows, num_rows)
+            string = f'/*\n{num_rows} example rows:\nSELECT * FROM w LIMIT {num_rows};\n'
         elif self.prompt_style == 'create_table_select_3_hidden':
-            string = '/*\n{} example rows:\n'.format(num_rows)
+            string = f'/*\n{num_rows} example rows:\n'
         elif few_shot_demonstration is True and self.prompt_style in \
-                ["create_table_select_3_full_table",
+                    ["create_table_select_3_full_table",
                  "create_table_select_3_full_table_w_gold_passage_image",
                  "create_table_select_3_full_table_w_all_passage_image"]:
-            string = '/*\n{} example rows:\nSELECT * FROM w LIMIT {};\n'.format(num_rows, num_rows)
+            string = f'/*\n{num_rows} example rows:\nSELECT * FROM w LIMIT {num_rows};\n'
         elif few_shot_demonstration is False and self.prompt_style in \
-                ["create_table_select_3_full_table",
+                    ["create_table_select_3_full_table",
                  "create_table_select_3_full_table_w_gold_passage_image",
                  "create_table_select_3_full_table_w_all_passage_image"]:
             string = '/*\nAll rows of the table:\nSELECT * FROM w;\n'
@@ -164,8 +163,8 @@ class PromptBuilder(object):
         """
         Pick the controllable operators for generation.
         """
-        candidate_operators = ['none', 'count', 'max', 'min', 'sum']
         if strategy == 'random':
+            candidate_operators = ['none', 'count', 'max', 'min', 'sum']
             return random.choice(candidate_operators)
         elif strategy == 'traverse':
             raise NotImplementedError
@@ -178,9 +177,7 @@ class PromptBuilder(object):
         """
         if strategy == 'fixed':
             return 2
-        elif strategy == 'random':
-            raise NotImplementedError
-        elif strategy == 'traverse':
+        elif strategy in ['random', 'traverse']:
             raise NotImplementedError
         else:
             raise ValueError
@@ -229,24 +226,26 @@ class PromptBuilder(object):
             all_passages, all_images = [], []
             caption_map = get_caption_map()
 
-            for passage_idx in range(len(passages['id'])):
-                all_passages.append({
+            all_passages.extend(
+                {
                     'id': passages['id'][passage_idx],
                     'title': passages['title'][passage_idx],
                     'url': passages['url'][passage_idx],
-                    'text': passages['text'][passage_idx]
-                })
-
-            for image_idx in range(len(images['id'])):
-                all_images.append({
+                    'text': passages['text'][passage_idx],
+                }
+                for passage_idx in range(len(passages['id']))
+            )
+            all_images.extend(
+                {
                     "id": images['id'][image_idx],
                     "title": images['title'][image_idx],
                     "url": images['url'][image_idx],
                     "path": images['path'][image_idx],
                     "pic": images['pic'][image_idx],
-                    "caption": caption_map[images['id'][image_idx]]
-                })
-
+                    "caption": caption_map[images['id'][image_idx]],
+                }
+                for image_idx in range(len(images['id']))
+            )
             one_shot_prompt += self._passage_prompt(
                 passages=all_passages,
                 only_title=only_title
@@ -256,18 +255,18 @@ class PromptBuilder(object):
                 only_title=only_title
             )
         else:
-            raise ValueError('{} is not supported.'.format(self.prompt_style))
+            raise ValueError(f'{self.prompt_style} is not supported.')
 
         # question and nsql pairs
         if prompt_type == ('question', 'nsql'):
-            one_shot_prompt += 'Q: {}\n'.format(question)
-            one_shot_prompt += 'NeuralSQL: {}\n'.format(nsql)
+            one_shot_prompt += f'Q: {question}\n'
+            one_shot_prompt += f'NeuralSQL: {nsql}\n'
         elif prompt_type == ('question', 'sql'):
-            one_shot_prompt += 'Q: {}\n'.format(question)
-            one_shot_prompt += 'SQL: {}\n'.format(nsql)
+            one_shot_prompt += f'Q: {question}\n'
+            one_shot_prompt += f'SQL: {nsql}\n'
         elif prompt_type == ('question', 'answer'):
-            one_shot_prompt += 'Q: {}\n'.format(question)
-            one_shot_prompt += 'A: {}\n'.format(', '.join(answer_text))
+            one_shot_prompt += f'Q: {question}\n'
+            one_shot_prompt += f"A: {', '.join(answer_text)}\n"
         else:
             raise ValueError(f'Prompt type {prompt_type} is not supported.')
 
@@ -335,24 +334,26 @@ class PromptBuilder(object):
             all_passages, all_images = [], []
             caption_map = get_caption_map()
 
-            for passage_idx in range(len(passages['id'])):
-                all_passages.append({
+            all_passages.extend(
+                {
                     'id': passages['id'][passage_idx],
                     'title': passages['title'][passage_idx],
                     'url': passages['url'][passage_idx],
-                    'text': passages['text'][passage_idx]
-                })
-
-            for image_idx in range(len(images['id'])):
-                all_images.append({
+                    'text': passages['text'][passage_idx],
+                }
+                for passage_idx in range(len(passages['id']))
+            )
+            all_images.extend(
+                {
                     "id": images['id'][image_idx],
                     "title": images['title'][image_idx],
                     "url": images['url'][image_idx],
                     "path": images['path'][image_idx],
                     "pic": images['pic'][image_idx],
-                    "caption": caption_map[images['id'][image_idx]]
-                })
-
+                    "caption": caption_map[images['id'][image_idx]],
+                }
+                for image_idx in range(len(images['id']))
+            )
             generate_prompt += self._passage_prompt(
                 passages=all_passages,
                 only_title=only_title
@@ -372,15 +373,7 @@ class PromptBuilder(object):
             gold_passages, gold_images = [], []
             caption_map = get_caption_map()
             for doc_id, doc_part in zip(supporting_context['doc_id'], supporting_context['doc_part']):
-                if doc_part == 'text':
-                    passage_idx = passages['id'].index(doc_id)
-                    gold_passages.append({
-                        'id': passages['id'][passage_idx],
-                        'title': passages['title'][passage_idx],
-                        'url': passages['url'][passage_idx],
-                        'text': passages['text'][passage_idx]
-                    })
-                elif doc_part == 'image':
+                if doc_part == 'image':
                     image_idx = images['id'].index(doc_id)
                     gold_images.append({
                         "id": images['id'][image_idx],
@@ -389,6 +382,14 @@ class PromptBuilder(object):
                         "path": images['path'][image_idx],
                         "pic": images['pic'][image_idx],
                         "caption": caption_map[doc_id]
+                    })
+                elif doc_part == 'text':
+                    passage_idx = passages['id'].index(doc_id)
+                    gold_passages.append({
+                        'id': passages['id'][passage_idx],
+                        'title': passages['title'][passage_idx],
+                        'url': passages['url'][passage_idx],
+                        'text': passages['text'][passage_idx]
                     })
             generate_prompt += self._passage_prompt(
                 passages=gold_passages,
@@ -399,23 +400,23 @@ class PromptBuilder(object):
                 only_title=only_title
             )
         else:
-            raise ValueError('{} is not supported.'.format(self.prompt_style))
+            raise ValueError(f'{self.prompt_style} is not supported.')
 
         # determine the target to generate
         if generate_type == ('answer',):
-            generate_prompt += 'Q: {}\n'.format(question)
+            generate_prompt += f'Q: {question}\n'
             generate_prompt += 'A: '
         elif generate_type == ('nsql',):
-            generate_prompt += 'Q: {}\n'.format(question)
+            generate_prompt += f'Q: {question}\n'
             generate_prompt += 'NeuralSQL: '
         elif generate_type == ('sql',):
-            generate_prompt += 'Q: {}\n'.format(question)
+            generate_prompt += f'Q: {question}\n'
             generate_prompt += 'SQL: '
         elif generate_type == ('npython',):
-            generate_prompt += 'Q: {}\n'.format(question)
+            generate_prompt += f'Q: {question}\n'
             generate_prompt += 'NeuralPython: '
         elif generate_type == ('python',):
-            generate_prompt += 'Q: {}\n'.format(question)
+            generate_prompt += f'Q: {question}\n'
             generate_prompt += 'Python: '
         else:
             raise ValueError(f'Generate type {generate_type} is not supported.')
@@ -429,12 +430,10 @@ class OpenAIQAPromptBuilder(object):
         _table = copy.deepcopy(table)
         header = _table['header']
         rows = _table['rows']
-        if drop_row_id:
-            if header[0] == "row_id":
-                header = header[1:]
-                rows = [_row[1:] for _row in rows]
-        prompt_str = 'Table: {}\n'.format(table_title) if table_title else ''
-        prompt_str += "/*\n"
+        if drop_row_id and header[0] == "row_id":
+            header = header[1:]
+            rows = [_row[1:] for _row in rows]
+        prompt_str = (f'Table: {table_title}\n' if table_title else '') + "/*\n"
         prompt_str += "\t".join(header) + "\n"
         prompt_str += '\n'.join(["\t".join([str(cell) for cell in row]) for row in rows]) + "\n"
         prompt_str += "*/"
@@ -455,19 +454,18 @@ class OpenAIQAPromptBuilder(object):
         qa_type, qa_question = item.qa_question.split('@')
         prompt = ''
         db_prompt = OpenAIQAPromptBuilder.table2codex_prompt(item.table, item.title)
-        prompt += "Give a database as shown below:\n{}\n\n".format(db_prompt)
+        prompt += f"Give a database as shown below:\n{db_prompt}\n\n"
 
         if prompting_method == 'basic':
             if qa_type == "map":
-                prompt += "Q: Answer question \"{}\" row by row.".format(qa_question)
+                prompt += f'Q: Answer question \"{qa_question}\" row by row.'
                 assert answer_split_token is not None
-                prompt += " The answer should be a list split by '{}' and have {} items in total.".format(
-                    answer_split_token, len(item.table['rows']))
-                prompt += "\nA: {}\n\n".format(f'{answer_split_token}'.join(item.qa_answer))
+                prompt += f" The answer should be a list split by '{answer_split_token}' and have {len(item.table['rows'])} items in total."
+                prompt += f"\nA: {f'{answer_split_token}'.join(item.qa_answer)}\n\n"
             elif qa_type == "ans":
-                prompt += "Q: Answer question \"{}\" for the table.".format(qa_question)
+                prompt += f'Q: Answer question \"{qa_question}\" for the table.'
                 prompt += " "
-                prompt += "\nA: {}\n\n".format(f'{answer_split_token}'.join(item.qa_answer))
+                prompt += f"\nA: {f'{answer_split_token}'.join(item.qa_answer)}\n\n"
             else:
                 raise ValueError("The QA type is not supported!")
 
@@ -475,24 +473,25 @@ class OpenAIQAPromptBuilder(object):
 
         elif prompting_method == "new_db":
             if qa_type == "map":
-                prompt += "Q: Answer question \"{}\" row by row.".format(qa_question)
+                prompt += f'Q: Answer question \"{qa_question}\" row by row.'
                 assert answer_split_token is not None
                 db_prompt_lines = db_prompt.split("\n")[2:-1]  # skip Title, /*, and */
-                db_prompt_lines_with_answer = []
-                db_prompt_lines_with_answer.append("/*")
-                db_prompt_lines_with_answer.append(db_prompt_lines[0])
+                db_prompt_lines_with_answer = ["/*", db_prompt_lines[0]]
                 assert len(db_prompt_lines[1:]) == len(
                     item.qa_answer), "answer items and table rows must be in the same number, check annotations"
-                for db_prompt_line, qa_answer_item in zip(db_prompt_lines[1:], item.qa_answer):
-                    db_prompt_lines_with_answer.append(
-                        "{}{}{}".format(db_prompt_line, db_mapping_token, qa_answer_item))
+                db_prompt_lines_with_answer.extend(
+                    f"{db_prompt_line}{db_mapping_token}{qa_answer_item}"
+                    for db_prompt_line, qa_answer_item in zip(
+                        db_prompt_lines[1:], item.qa_answer
+                    )
+                )
                 db_prompt_lines_with_answer.append("*/")
                 prompt += "\n{}\n".format("\n".join(db_prompt_lines_with_answer))
 
             elif qa_type == "ans":
-                prompt += "Q: Answer question \"{}\" for the table.".format(qa_question)
+                prompt += f'Q: Answer question \"{qa_question}\" for the table.'
                 prompt += " "
-                prompt += "\nA: {}\n".format(f'{answer_split_token}'.join(item.qa_answer))
+                prompt += f"\nA: {f'{answer_split_token}'.join(item.qa_answer)}\n"
             else:
                 raise ValueError("The QA type is not supported!")
 

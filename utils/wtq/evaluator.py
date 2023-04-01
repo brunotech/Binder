@@ -121,7 +121,7 @@ class StringValue(Value):
         return self._hash
 
     def __str__(self):
-        return 'S' + str([self.normalized])
+        return f'S{[self.normalized]}'
 
     __repr__ = __str__
 
@@ -138,10 +138,9 @@ class NumberValue(Value):
             self._amount = int(amount)
         else:
             self._amount = float(amount)
-        if not original_string:
-            self._normalized = str(self._amount)
-        else:
-            self._normalized = normalize(original_string)
+        self._normalized = (
+            normalize(original_string) if original_string else str(self._amount)
+        )
         self._hash = hash(self._amount)
 
     @property
@@ -196,13 +195,11 @@ class DateValue(Value):
         self._year = year
         self._month = month
         self._day = day
-        if not original_string:
-            self._normalized = '{}-{}-{}'.format(
-                year if year != -1 else 'xx',
-                month if month != -1 else 'xx',
-                day if day != '-1' else 'xx')
-        else:
-            self._normalized = normalize(original_string)
+        self._normalized = (
+            normalize(original_string)
+            if original_string
+            else f"{year if year != -1 else 'xx'}-{month if month != -1 else 'xx'}-{day if day != '-1' else 'xx'}"
+        )
         self._hash = hash((self._year, self._month, self._day))
 
     @property
@@ -225,9 +222,7 @@ class DateValue(Value):
         assert isinstance(other, Value)
         if self.normalized == other.normalized:
             return True
-        if isinstance(other, DateValue):
-            return self.ymd == other.ymd
-        return False
+        return self.ymd == other.ymd if isinstance(other, DateValue) else False
 
     @staticmethod
     def parse(text):
@@ -294,10 +289,14 @@ def to_value_list(original_strings, corenlp_values=None):
     if corenlp_values is not None:
         assert isinstance(corenlp_values, (list, tuple, set))
         assert len(original_strings) == len(corenlp_values)
-        return list(set(to_value(x, y) for (x, y)
-                        in zip(original_strings, corenlp_values)))
+        return list(
+            {
+                to_value(x, y)
+                for (x, y) in zip(original_strings, corenlp_values)
+            }
+        )
     else:
-        return list(set(to_value(x) for x in original_strings))
+        return list({to_value(x) for x in original_strings})
 
 
 ################ Check the Predicted Denotations ################
@@ -314,11 +313,10 @@ def check_denotation(target_values, predicted_values):
     # Check size
     if len(target_values) != len(predicted_values):
         return False
-    # Check items
-    for target in target_values:
-        if not any(target.match(pred) for pred in predicted_values):
-            return False
-    return True
+    return all(
+        any(target.match(pred) for pred in predicted_values)
+        for target in target_values
+    )
 
 
 ################ Batch Mode ################

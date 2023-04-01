@@ -30,7 +30,7 @@ def worker_annotate(
     """
     A worker process for annotating.
     """
-    g_dict = dict()
+    g_dict = {}
     built_few_shot_prompts = []
     for g_eid in g_eids:
         try:
@@ -126,7 +126,7 @@ def main():
     for g_eid in generate_eids:
         generate_eids_group[int(g_eid) % args.n_processes].append(g_eid)
     print('\n******* Annotating *******')
-    g_dict = dict()
+    g_dict = {}
     worker_results = []
     pool = multiprocessing.Pool(processes=args.n_processes)
     for pid in range(args.n_processes):
@@ -144,7 +144,7 @@ def main():
     # Merge annotation results
     for r in worker_results:
         worker_g_dict = r.get()
-        g_dict.update(worker_g_dict)
+        g_dict |= worker_g_dict
     pool.close()
     pool.join()
 
@@ -206,6 +206,6 @@ if __name__ == '__main__':
     args.stop_tokens = args.stop_tokens.split('||')
     print("Args info:")
     for k in args.__dict__:
-        print(k + ": " + str(args.__dict__[k]))
+        print(f"{k}: {str(args.__dict__[k])}")
 
     main()

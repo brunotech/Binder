@@ -32,7 +32,7 @@ def worker_annotate(
     """
     A worker process for annotating.
     """
-    g_dict = dict()
+    g_dict = {}
     built_few_shot_prompts = []
     # Hard encode, only work for test
     with open(os.path.join(ROOT_DIR, "scripts", "w_ic_examples_retrieval",
@@ -166,7 +166,7 @@ def main():
     for g_eid in generate_eids:
         generate_eids_group[int(g_eid) % args.n_processes].append(g_eid)
     print('\n******* Annotating *******')
-    g_dict = dict()
+    g_dict = {}
     worker_results = []
     pool = multiprocessing.Pool(processes=args.n_processes)
     for pid in range(args.n_processes):
@@ -185,7 +185,7 @@ def main():
     # Merge annotation results
     for r in worker_results:
         worker_g_dict = r.get()
-        g_dict.update(worker_g_dict)
+        g_dict |= worker_g_dict
     pool.close()
     pool.join()
 

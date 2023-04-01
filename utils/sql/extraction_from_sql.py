@@ -82,10 +82,7 @@ def parse_col_unit(toks, start_idx, tables_with_alias, schema, default_tables=No
       :returns next idx, (agg_op id, col_id)
   """
   idx = start_idx
-  if end_idx is not None:
-    len_ = len(toks[start_idx:end_idx])
-  else:
-    len_ = len(toks)
+  len_ = len(toks[start_idx:end_idx]) if end_idx is not None else len(toks)
   isBlock = False
   isDistinct = False
   if toks[idx] == '(':
@@ -191,7 +188,8 @@ def parse_condition(toks, start_idx, tables_with_alias, schema, default_tables=N
       not_op = True
       idx += 1
 
-    assert idx < len_ and toks[idx] in WHERE_OPS, "Error condition: idx: {}, tok: {}".format(idx, toks[idx])
+    assert (idx < len_ and toks[idx]
+            in WHERE_OPS), f"Error condition: idx: {idx}, tok: {toks[idx]}"
     op_id = WHERE_OPS.index(toks[idx])
     idx += 1
     val1 = val2 = None
@@ -199,19 +197,17 @@ def parse_condition(toks, start_idx, tables_with_alias, schema, default_tables=N
       idx = parse_value(toks, idx, tables_with_alias, schema, default_tables)
       assert toks[idx] == 'and'
       idx += 1
-      idx = parse_value(toks, idx, tables_with_alias, schema, default_tables)
     else:  # normal case: single value
-      idx = parse_value(toks, idx, tables_with_alias, schema, default_tables)
       val2 = None
 
-    # conds.append((not_op, op_id, val_unit, val1, val2))
+    idx = parse_value(toks, idx, tables_with_alias, schema, default_tables)
+    if idx < len_:
+      if (toks[idx] in CLAUSE_KEYWORDS or toks[idx] in (")", ";") or toks[idx] in JOIN_KEYWORDS):
+        break
 
-    if idx < len_ and (toks[idx] in CLAUSE_KEYWORDS or toks[idx] in (")", ";") or toks[idx] in JOIN_KEYWORDS):
-      break
-
-    if idx < len_ and toks[idx] in COND_OPS:
-      # conds.append(toks[idx])
-      idx += 1  # skip and/or
+      if toks[idx] in COND_OPS:
+        # conds.append(toks[idx])
+        idx += 1  # skip and/or
   return idx# , conds
 
 
@@ -299,8 +295,7 @@ def parse_where(toks, start_idx, tables_with_alias, schema, default_tables):
     return idx
 
   idx += 1
-  idx = parse_condition(toks, idx, tables_with_alias, schema, default_tables)
-  return idx
+  return parse_condition(toks, idx, tables_with_alias, schema, default_tables)
 
 def parse_group_by(toks, start_idx, tables_with_alias, schema, default_tables):
   idx = start_idx
@@ -314,7 +309,8 @@ def parse_group_by(toks, start_idx, tables_with_alias, schema, default_tables):
   assert toks[idx] == 'by'
   idx += 1
 
-  while idx < len_ and not (toks[idx] in CLAUSE_KEYWORDS or toks[idx] in (")", ";")):
+  while (idx < len_ and toks[idx] not in CLAUSE_KEYWORDS
+         and toks[idx] not in (")", ";")):
     idx = parse_col_unit(toks, idx, tables_with_alias, schema, default_tables)
     # col_units.append(col_unit)
     if idx < len_ and toks[idx] == ',':
@@ -332,8 +328,7 @@ def parse_having(toks, start_idx, tables_with_alias, schema, default_tables):
     return idx
 
   idx += 1
-  idx = parse_condition(toks, idx, tables_with_alias, schema, default_tables)
-  return idx
+  return parse_condition(toks, idx, tables_with_alias, schema, default_tables)
 
 def parse_order_by(toks, start_idx, tables_with_alias, schema, default_tables):
   idx = start_idx
@@ -348,7 +343,8 @@ def parse_order_by(toks, start_idx, tables_with_alias, schema, default_tables):
   assert toks[idx] == 'by'
   idx += 1
 
-  while idx < len_ and not (toks[idx] in CLAUSE_KEYWORDS or toks[idx] in (")", ";")):
+  while (idx < len_ and toks[idx] not in CLAUSE_KEYWORDS
+         and toks[idx] not in (")", ";")):
     idx = parse_val_unit(toks, idx, tables_with_alias, schema, default_tables)
     # val_units.append(val_unit)
     if idx < len_ and toks[idx] in ORDER_OPS:
@@ -368,10 +364,6 @@ def parse_limit(toks, start_idx):
   if idx < len_ and toks[idx] == 'limit':
     idx += 2
     toks[idx - 1] = "_limit_value_"
-    # make limit value can work, cannot assume put 1 as a fake limit number
-    if type(toks[idx - 1]) != int:
-      return idx
-
     return idx
 
   return idx
@@ -420,7 +412,7 @@ def extract_template_from_sql(sql, schema={}):
   try:
     toks = tokenize(sql)
   except:
-    print("Tokenization error for {}".format(sql))
+    print(f"Tokenization error for {sql}")
     toks = []
   # print(toks)
   template = []
@@ -513,7 +505,7 @@ def is_valid_schema(schema):
   for table in schema:
     if "." in table:
       return False
-    if any([keyword == table for keyword in CLAUSE_KEYWORDS]):
+    if any(keyword == table for keyword in CLAUSE_KEYWORDS):
       return False
     for column in schema[table]:
       if "." in column or " " in column or '"' in column or "'" in column:
@@ -540,8 +532,8 @@ if __name__ == "__main__":
   if args.task == "schema_extraction":
     if args.mode == "debug":
       sql = "SELECT count(*) FROM games"
-      sql = sql + " INTERSECT " + "SELECT sacks, year FROM players"
-      sql = sql + " EXCEPT " + 'SELECT T1.year, T1.sacks FROM players AS T1 JOIN tackles AS T2 ON T1.id = T2.player_id WHERE T2.manager = "A" and T2.season NOT IN (SELECT season FROM match WHERE match_name = "IVL" INTERSECT SELECT T1.year, T1.sacks FROM sack AS T1) GROUP BY T1.year, T1.sacks HAVING count(T1.coach) > 10 ORDER BY T2.score LIMIT 5'
+      sql = f"{sql} INTERSECT SELECT sacks, year FROM players"
+      sql = f'{sql} EXCEPT SELECT T1.year, T1.sacks FROM players AS T1 JOIN tackles AS T2 ON T1.id = T2.player_id WHERE T2.manager = "A" and T2.season NOT IN (SELECT season FROM match WHERE match_name = "IVL" INTERSECT SELECT T1.year, T1.sacks FROM sack AS T1) GROUP BY T1.year, T1.sacks HAVING count(T1.coach) > 10 ORDER BY T2.score LIMIT 5'
       sql = "SELECT T1.pld FROM pld AS T1 JOIN games AS T2 ON T1.crs_code = T2.crs_code JOIN GROUP BY T1.pld WHERE T2.gf = '8' AND T2.gf = '9'"
       sql = 'select * from head where height = "6-0" or height = "6-0" order by height asc'
       schema = {}
@@ -567,33 +559,16 @@ if __name__ == "__main__":
           if is_valid_schema(schema):
             example["extracted_schema"] = schema
             fout.write(json.dumps(example) + "\n")
-    elif args.mode == "verbose":
-      fout = open(args.output_file, "w")
-      with open(args.input_file) as fin:
-        for line in fin:
-          example = json.loads(line)
-          schema = {}
-          sql = example["sql"] if "sql" in example else example["pred"]
-          sql = clean_sql(sql)
-          example["sql"] = sql
-          extract_schema_from_sql(schema, sql)
-          for table in schema:
-            schema[table] = list(set(schema[table]))
-          example["extracted_schema"] = schema
-          fout.write(json.dumps(example) + "\n")
-          if is_valid_schema(schema):
-            example["extracted_schema"] = schema
-            fout.write(json.dumps(example) + "\n")
   elif args.task == "template_extraction":
     if args.mode == "debug":
       sql = "SELECT avg(T1.Votes) FROM seats AS T1 JOIN votes AS T2 ON T1.Seat_ID = T2.Seat_ID WHERE T1.seats BETWEEN 1 AND 2 and T1.Seats = 1 AND T2.Votes = 10"
       print(extract_template_from_sql(sql))
       print(extract_partial_template_from_sql(sql))
     elif args.mode == "verbose":
-      fout_json = open(args.output_file + ".json", "w")
-      fout_txt = open(args.output_file + ".txt", "w")
-      low_freq_txt = open(args.output_file + ".low_freq", "w")
-      high_freq_txt = open(args.output_file + ".high_freq", "w")
+      fout_json = open(f"{args.output_file}.json", "w")
+      fout_txt = open(f"{args.output_file}.txt", "w")
+      low_freq_txt = open(f"{args.output_file}.low_freq", "w")
+      high_freq_txt = open(f"{args.output_file}.high_freq", "w")
       all_templates = set()
       # for input_file in args.input_file.split(","):
       templates = {}
@@ -608,7 +583,7 @@ if __name__ == "__main__":
           if template_str not in templates:
             templates[template_str] = []
           templates[template_str].append(sql)
-      print("{} has template {}".format(args.input_file, len(templates)))
+      print(f"{args.input_file} has template {len(templates)}")
 
       json.dump(templates, fout_json)
       for template in sorted(templates.keys()):

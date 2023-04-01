@@ -164,29 +164,28 @@ class WikiTableQuestion(datasets.GeneratorBasedBuilder):
                     continue
                 data_id, question, table_id, gold_result_str = line.strip("\n").split("\t")
 
-                if data_id in squall_id_map.keys():
-                    # Data annotation from WikiTableQuestion dataset
-                    table = _load_table(os.path.join(data_dir, table_id.replace('.csv', '.tsv')))
-                    gold_result = gold_result_str.split('|')
-
-                    # Data annotation from Squall dataset.
-                    squall_data_item = squall_id_map[data_id]
-                    squall_table_id = squall_data_item["tbl"]
-                    sql_struct = squall_data_item["sql"]
-                    engine, src_table_content = db_engine_map[squall_table_id], src_table_content_map[squall_table_id]
-                    try:
-                        encode_sql_str, _, exec_sql_str = retrieve_wtq_query_answer(engine, table, sql_struct)
-                    except IndexError as e:
-                        # In case header is modified.
-                        encode_sql_str, _, exec_sql_str = retrieve_wtq_query_answer(engine, src_table_content, sql_struct)
-
-                    yield idx, {
-                        "id": data_id,
-                        "question": question,
-                        "table_id": table_id,
-                        "table": table,
-                        "sql": encode_sql_str,
-                        "answer_text": gold_result,
-                    }
-                else:
+                if data_id not in squall_id_map:
                     continue
+                # Data annotation from WikiTableQuestion dataset
+                table = _load_table(os.path.join(data_dir, table_id.replace('.csv', '.tsv')))
+                gold_result = gold_result_str.split('|')
+
+                # Data annotation from Squall dataset.
+                squall_data_item = squall_id_map[data_id]
+                squall_table_id = squall_data_item["tbl"]
+                sql_struct = squall_data_item["sql"]
+                engine, src_table_content = db_engine_map[squall_table_id], src_table_content_map[squall_table_id]
+                try:
+                    encode_sql_str, _, exec_sql_str = retrieve_wtq_query_answer(engine, table, sql_struct)
+                except IndexError as e:
+                    # In case header is modified.
+                    encode_sql_str, _, exec_sql_str = retrieve_wtq_query_answer(engine, src_table_content, sql_struct)
+
+                yield idx, {
+                    "id": data_id,
+                    "question": question,
+                    "table_id": table_id,
+                    "table": table,
+                    "sql": encode_sql_str,
+                    "answer_text": gold_result,
+                }

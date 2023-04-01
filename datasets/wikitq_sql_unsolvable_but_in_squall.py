@@ -8096,8 +8096,7 @@ class WikiTableQuestion(datasets.GeneratorBasedBuilder):
         squall_id_list = []
         with open(squall_path) as f:
             squall_data = json.load(f)
-            for squall_item in squall_data:
-                squall_id_list.append(squall_item["nt"])
+            squall_id_list.extend(squall_item["nt"] for squall_item in squall_data)
         with open(filepath, encoding="utf-8") as f:
             for idx, line in enumerate(f):
                 # skip the header

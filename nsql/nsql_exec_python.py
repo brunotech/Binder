@@ -73,19 +73,19 @@ verbose = {}""".format(str(verbose))
         tmp_root_path = "tmp_python"
         os.makedirs(tmp_root_path, exist_ok=True)
         # Save the db
-        db_file_path = '{}.db'.format(format(uuid.uuid4()))
+        db_file_path = f'{format(uuid.uuid4())}.db'
         db_path = os.path.join(tmp_root_path, db_file_path)
         with open(db_path, "wb") as f:
             pickle.dump(db, f)
 
         # Save the qa_model
-        model_file_path = '{}.model'.format(format(uuid.uuid4()))
+        model_file_path = f'{format(uuid.uuid4())}.model'
         model_path = os.path.join(tmp_root_path, model_file_path)
         with open(model_path, "wb") as f:
             pickle.dump(self.qa_model, f)
 
         # Set the result path
-        result_file_path = '{}.json'.format(format(uuid.uuid4()))
+        result_file_path = f'{format(uuid.uuid4())}.json'
         result_path = os.path.join(tmp_root_path, result_file_path)
 
         # Read it and call solve function
@@ -100,14 +100,16 @@ verbose = {}""".format(str(verbose))
         json.dump(result, f)""".format(db_path, model_path, result_path)
 
         # Concat the code and execute the python
-        all_code = "{}\n\n{}\n\n{}\n\n{}\n\n".format(import_part, qa_map_function_part, qa_ans_function_part,
-                                                     convert_part) + nsql + "\n\n" + main_part
+        all_code = (
+            f"{import_part}\n\n{qa_map_function_part}\n\n{qa_ans_function_part}\n\n{convert_part}\n\n{nsql}"
+            + "\n\n"
+        ) + main_part
 
         if verbose:
             print("----> Code <----")
             print(all_code)
 
-        python_file_path = '{}.py'.format(format(uuid.uuid4()))
+        python_file_path = f'{format(uuid.uuid4())}.py'
         python_path = os.path.join(tmp_root_path, python_file_path)
         with open(python_path, "w") as f:
             f.write(all_code)

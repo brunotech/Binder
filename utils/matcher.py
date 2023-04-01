@@ -10,7 +10,7 @@ class Matcher(object):
         pass
 
     def match_sentence_with_table(self, sent: str, df: pd.DataFrame, fuzz_threshold=100):
-        phrase2matched_cells = dict()
+        phrase2matched_cells = {}
         sent = str_normalize(sent)
         sent = sent.strip(string.punctuation)
         for ngram in range(5, 0, -1):

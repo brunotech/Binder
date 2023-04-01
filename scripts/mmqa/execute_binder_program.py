@@ -26,16 +26,17 @@ def worker_execute(
     """
     A worker process for execution.
     """
-    result_dict = dict()
+    result_dict = {}
     n_total_samples, n_correct_samples = 0, 0
     for eid, data_item in enumerate(dataset):
         eid = str(eid)
         if eid not in nsql_dict:
             continue
         print(f"Process#{pid}: eid {eid}, wtq-id {data_item['id']}")
-        result_dict[eid] = dict()
-        result_dict[eid]['question'] = data_item['question']
-        result_dict[eid]['gold_answer'] = data_item['answer_text'].split(" | ")
+        result_dict[eid] = {
+            'question': data_item['question'],
+            'gold_answer': data_item['answer_text'].split(" | "),
+        }
         n_total_samples += 1
         # Load table
         table = data_item['table']
@@ -45,23 +46,41 @@ def worker_execute(
         executor = Executor(args, keys)
         # Execute
         exec_answer_list = []
-        nsql_exec_answer_dict = dict()
+        nsql_exec_answer_dict = {}
         for idx, (nsql, logprob) in enumerate(nsql_dict[eid]['nsqls']):
             print(f"Process#{pid}: eid {eid}, original_id {data_item['id']}, executing program#{idx}, logprob={logprob}")
             try:
                 if nsql in nsql_exec_answer_dict:
                     exec_answer = nsql_exec_answer_dict[nsql]
                 else:
-                    db = NeuralDB([{
-                        "title": "{} ({})".format(table['title'][0], table['caption'][0]),
-                        "table": {"header": header, "rows": rows, "rows_with_links": rows_with_links}
-                    }],
-                        passages=[{"id": _id, "title": title, "text": text} for _id, title, text in
-                                  zip(data_item['passages']['id'], data_item['passages']['title'],
-                                      data_item['passages']['text'])],
-                        images=[{"id": _id, "title": title, "pic": pic} for _id, title, pic in
-                                zip(data_item['images']['id'], data_item['images']['title'],
-                                    data_item['images']['pic'])])
+                    db = NeuralDB(
+                        [
+                            {
+                                "title": f"{table['title'][0]} ({table['caption'][0]})",
+                                "table": {
+                                    "header": header,
+                                    "rows": rows,
+                                    "rows_with_links": rows_with_links,
+                                },
+                            }
+                        ],
+                        passages=[
+                            {"id": _id, "title": title, "text": text}
+                            for _id, title, text in zip(
+                                data_item['passages']['id'],
+                                data_item['passages']['title'],
+                                data_item['passages']['text'],
+                            )
+                        ],
+                        images=[
+                            {"id": _id, "title": title, "pic": pic}
+                            for _id, title, pic in zip(
+                                data_item['images']['id'],
+                                data_item['images']['title'],
+                                data_item['images']['pic'],
+                            )
+                        ],
+                    )
 
                     nsql = post_process_sql(
                         sql_str=nsql,
@@ -138,36 +157,30 @@ def main():
     # Load programs and process as a unified format
     with open(os.path.join(args.save_dir, args.input_program_file), 'r') as f:
         data = json.load(f)
-    nsql_dict = dict()
+    nsql_dict = {}
     for eid, data_dict in data.items():
-        if data[eid]['generations']:
-            nsqls = data[eid]['generations']
-        else:
-            nsqls = [['<dummy program>', 0.]]
+        nsqls = data[eid]['generations'] or [['<dummy program>', 0.]]
         nsql_dict[eid] = {'nsqls': nsqls}
 
     # Split by processes
-    nsql_dict_group = [dict() for _ in range(args.n_processes)]
+    nsql_dict_group = [{} for _ in range(args.n_processes)]
     for idx, eid in enumerate(nsql_dict.keys()):
         nsql_dict_group[idx % args.n_processes][eid] = nsql_dict[eid]
 
     # Execute programs
-    result_dict = dict()
-    worker_results = []
+    result_dict = {}
     pool = multiprocessing.Pool(processes=args.n_processes)
-    for pid in range(args.n_processes):
-        worker_results.append(pool.apply_async(worker_execute, args=(
-            pid,
-            args,
-            dataset,
-            nsql_dict_group[pid],
-            keys
-        )))
-
+    worker_results = [
+        pool.apply_async(
+            worker_execute,
+            args=(pid, args, dataset, nsql_dict_group[pid], keys),
+        )
+        for pid in range(args.n_processes)
+    ]
     # Merge worker results
     for r in worker_results:
         worker_result_dict = r.get()
-        result_dict.update(worker_result_dict)
+        result_dict |= worker_result_dict
     pool.close()
     pool.join()
     n_correct_samples = 0
@@ -233,6 +246,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print("Args info:")
     for k in args.__dict__:
-        print(k + ": " + str(args.__dict__[k]))
+        print(f"{k}: {str(args.__dict__[k])}")
 
     main()

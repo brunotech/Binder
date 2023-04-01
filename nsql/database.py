@@ -15,13 +15,12 @@ def check_in_and_return(key: str, source: dict):
     # `` wrapped means as a whole
     if key.startswith("`") and key.endswith("`"):
         key = key[1:-1]
-    if key in source.keys():
+    if key in source:
         return source[key]
-    else:
-        for _k, _v in source.items():
-            if _k.lower() == key.lower():
-                return _v
-        raise ValueError("{} not in {}".format(key, source))
+    for _k, _v in source.items():
+        if _k.lower() == key.lower():
+            return _v
+    raise ValueError(f"{key} not in {source}")
 
 
 class NeuralDB(object):
@@ -62,15 +61,13 @@ class NeuralDB(object):
             # Link Passages
             for passage in passages:
                 title, passage_content = passage['title'], passage['text']
-                linked_cell = link_title2cell_map.get(title, None)
-                if linked_cell:
+                if linked_cell := link_title2cell_map.get(title):
                     self.passage_linker[linked_cell] = title
 
             # Images
             for image in images:
                 title, picture = image['title'], image['pic']
-                linked_cell = link_title2cell_map.get(title, None)
-                if linked_cell:
+                if linked_cell := link_title2cell_map.get(title):
                     self.image_linker[linked_cell] = title
 
         for table_info in tables:
@@ -82,31 +79,29 @@ class NeuralDB(object):
         self.tmp_path = "tmp"
         os.makedirs(self.tmp_path, exist_ok=True)
         # self.db_path = os.path.join(self.tmp_path, '{}.db'.format(hash(time.time())))
-        self.db_path = os.path.join(self.tmp_path, '{}.db'.format(uuid.uuid4()))
+        self.db_path = os.path.join(self.tmp_path, f'{uuid.uuid4()}.db')
         self.sqlite_conn = sqlite3.connect(self.db_path)
 
         # Create DB
-        assert len(tables) >= 1, "DB has no table inside"
+        assert tables, "DB has no table inside"
         table_0 = tables[0]
         if len(tables) > 1:
             raise ValueError("More than one table not support yet.")
-        else:
-            table_0["table"].to_sql("w", self.sqlite_conn)
-            self.table_name = "w"
-            self.table_title = table_0.get('title', None)
+        table_0["table"].to_sql("w", self.sqlite_conn)
+        self.table_name = "w"
+        self.table_title = table_0.get('title', None)
 
         # Records conn
-        self.db = records.Database('sqlite:///{}'.format(self.db_path))
+        self.db = records.Database(f'sqlite:///{self.db_path}')
         self.records_conn = self.db.get_connection()
 
     def __str__(self):
-        return str(self.execute_query("SELECT * FROM {}".format(self.table_name)))
+        return str(self.execute_query(f"SELECT * FROM {self.table_name}"))
 
     def get_table(self, table_name=None):
-        table_name = self.table_name if not table_name else table_name
-        sql_query = "SELECT * FROM {}".format(table_name)
-        _table = self.execute_query(sql_query)
-        return _table
+        table_name = table_name or self.table_name
+        sql_query = f"SELECT * FROM {table_name}"
+        return self.execute_query(sql_query)
 
     def get_header(self, table_name=None):
         _table = self.get_table(table_name)
@@ -155,11 +150,10 @@ class NeuralDB(object):
         # When the sql query is a column name (@deprecated: or a certain value with '' and "" surrounded).
         if len(sql_query.split(' ')) == 1 or (sql_query.startswith('`') and sql_query.endswith('`')):
             col_name = sql_query
-            new_sql_query = r"SELECT row_id, {} FROM {}".format(col_name, self.table_name)
+            new_sql_query = f"SELECT row_id, {col_name} FROM {self.table_name}"
             # Here we use a hack that when a value is surrounded by '' or "", the sql will return a column of the value,
             # while for variable, no ''/"" surrounded, this sql will query for the column.
             out = self.records_conn.query(new_sql_query)
-        # When the sql query wants all cols or col_id, which is no need for us to add 'row_id'.
         elif sql_query.lower().startswith("select *") or sql_query.startswith("select col_id"):
             out = self.records_conn.query(sql_query)
         else:
@@ -187,8 +181,8 @@ class NeuralDB(object):
         Add sub_table into the table.
         @return:
         """
-        table_name = self.table_name if not table_name else table_name
-        sql_query = "SELECT * FROM {}".format(table_name)
+        table_name = table_name or self.table_name
+        sql_query = f"SELECT * FROM {table_name}"
         oring_table = self.execute_query(sql_query)
         old_table = pd.DataFrame(oring_table["rows"], columns=oring_table["header"])
         # concat the new column into old table
@@ -198,5 +192,6 @@ class NeuralDB(object):
         new_table.to_sql(table_name, self.sqlite_conn, if_exists='replace',
                          index=False)
         if verbose:
-            print("Insert column(s) {} (dtypes: {}) into table.\n".format(', '.join([_ for _ in sub_table['header']]),
-                                                                          sub_table_df_normed.dtypes))
+            print(
+                f"Insert column(s) {', '.join(list(sub_table['header']))} (dtypes: {sub_table_df_normed.dtypes}) into table.\n"
+            )

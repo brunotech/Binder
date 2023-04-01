@@ -44,8 +44,7 @@ class Generator(object):
                 trunc_line_index = idx
                 break
         new_prompt_part1 = '\n'.join(prompt_part1_lines[trunc_line_index:][::-1])
-        prompt = new_prompt_part1 + '\n' + prompt_part2
-        return prompt
+        return new_prompt_part1 + '\n' + prompt_part2
 
     def build_few_shot_prompt_from_file(
             self,
@@ -71,8 +70,7 @@ class Generator(object):
         few_shot_prompt_list = few_shot_prompt_list[:n_shots]
         few_shot_prompt_list[-1] = few_shot_prompt_list[
             -1].strip()  # It is essential for prompting to remove extra '\n'
-        few_shot_prompt = '\n'.join(few_shot_prompt_list)
-        return few_shot_prompt
+        return '\n'.join(few_shot_prompt_list)
 
     def build_generate_prompt(
             self,
@@ -121,13 +119,13 @@ class Generator(object):
             print('- - - - - - - - - - ->>')
 
         # parse api results
-        response_dict = dict()
+        response_dict = {}
         for idx, g in enumerate(result['choices']):
             try:
                 text = g['text']
                 logprob = sum(g['logprobs']['token_logprobs'])
                 eid = result_idx_to_eid[idx]
-                eid_pairs = response_dict.get(eid, None)
+                eid_pairs = response_dict.get(eid)
                 if eid_pairs is None:
                     eid_pairs = []
                     response_dict[eid] = eid_pairs
@@ -142,8 +140,6 @@ class Generator(object):
                     print(e)
                     print(text)
                     print('-----------------------------')
-                pass
-
         return response_dict
 
     def _call_codex_api(

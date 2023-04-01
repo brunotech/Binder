@@ -110,8 +110,7 @@ class WikiTableQuestion(datasets.GeneratorBasedBuilder):
         squall_id_list = []
         with open(squall_path) as f:
             squall_data = json.load(f)
-            for squall_item in squall_data:
-                squall_id_list.append(squall_item["nt"])
+            squall_id_list.extend(squall_item["nt"] for squall_item in squall_data)
         # data_id, question, table_id, gold_result_str
         with open(filepath, encoding="utf-8") as f:
             for idx, line in enumerate(f):
@@ -119,15 +118,14 @@ class WikiTableQuestion(datasets.GeneratorBasedBuilder):
                 if idx == 0:
                     continue
                 data_id, question, table_id, gold_result_str = line.strip("\n").split("\t")
-                if data_id not in squall_id_list:
-                    gold_result = gold_result_str.split('|')
-                    yield idx, {
-                        "id": data_id,
-                        "question": question,
-                        "table_id": table_id,
-                        "table": _load_table(os.path.join(data_dir, table_id.replace('.csv', '.tsv'))),
-                        # convert the .csv postfix to .tsv, for easier read-in
-                        "answer_text": gold_result,
-                    }
-                else:
+                if data_id in squall_id_list:
                     continue
+                gold_result = gold_result_str.split('|')
+                yield idx, {
+                    "id": data_id,
+                    "question": question,
+                    "table_id": table_id,
+                    "table": _load_table(os.path.join(data_dir, table_id.replace('.csv', '.tsv'))),
+                    # convert the .csv postfix to .tsv, for easier read-in
+                    "answer_text": gold_result,
+                }

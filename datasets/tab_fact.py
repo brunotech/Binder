@@ -148,7 +148,7 @@ class TabFact(datasets.GeneratorBasedBuilder):
                 small_test_dict[csv_str] = False
 
             for small_test_id in small_test_ids:
-                assert small_test_id in small_test_dict.keys()
+                assert small_test_id in small_test_dict
                 small_test_dict[small_test_id] = True
 
             return small_test_dict

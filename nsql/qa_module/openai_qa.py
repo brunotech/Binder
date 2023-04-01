@@ -34,25 +34,27 @@ class OpenAIQAModel(object):
         self.db_mapping_token = "\t"
 
     def call_openai_api_completion(self, prompt):
-        completion = self.generator._call_codex_api(engine="code-davinci-002",
-                                                    prompt=prompt,
-                                                    max_tokens=max_tokens,
-                                                    temperature=0,
-                                                    top_p=1,
-                                                    n=1,
-                                                    stop=["\n\n"])
-        return completion
+        return self.generator._call_codex_api(
+            engine="code-davinci-002",
+            prompt=prompt,
+            max_tokens=max_tokens,
+            temperature=0,
+            top_p=1,
+            n=1,
+            stop=["\n\n"],
+        )
 
     def call_openai_for_completion_text(self, prompt, openai_usage_type="completion"):
-        if openai_usage_type == "completion":
-            completion = self.call_openai_api_completion(prompt)
-            return completion.choices[0].text
-        else:
-            raise ValueError("The model usage type '{}' doesn't exists!".format(openai_usage_type))
+        if openai_usage_type != "completion":
+            raise ValueError(f"The model usage type '{openai_usage_type}' doesn't exists!")
+        completion = self.call_openai_api_completion(prompt)
+        return completion.choices[0].text
 
     @staticmethod
     def merge_tables(tables, by='row_id'):
-        assert len(set([len(_table['rows']) for _table in tables])) == 1, "Tables must have the same rows!"
+        assert (
+            len({len(_table['rows']) for _table in tables}) == 1
+        ), "Tables must have the same rows!"
         merged_header = [by]
         by_idx = tables[0]['header'].index(by)
         merged_rows = [[_row[by_idx]] for _row in tables[0]['rows']]
@@ -64,7 +66,7 @@ class OpenAIQAModel(object):
                     continue
                 if col in merged_header:
                     # When the column is duplicate, and postfix _0, _1 etc.
-                    col = "{}_{}".format(col, merged_header.count(col))
+                    col = f"{col}_{merged_header.count(col)}"
                 merged_header.append(col)
                 for i, row in enumerate(rows):
                     merged_rows[i].append(row[col_idx])
@@ -96,30 +98,28 @@ class OpenAIQAModel(object):
             few_shot_prompt = '\n'.join(few_shot_prompt_list[:num_qa_shots])
             prompt = few_shot_prompt
 
-        prompt += "\nGive a database as shown below:\n{}\n\n".format(
-            OpenAIQAPromptBuilder.table2codex_prompt(sub_table, table_title)
-        )
+        prompt += f"\nGive a database as shown below:\n{OpenAIQAPromptBuilder.table2codex_prompt(sub_table, table_title)}\n\n"
 
         if qa_type == "map":
-            prompt += "Q: Answer question \"{}\" row by row.".format(question)
+            prompt += f'Q: Answer question \"{question}\" row by row.'
             assert answer_split_token is not None
             if prompting_method == "basic":
-                prompt += " The answer should be a list split by '{}' and have {} items in total.".format(
-                    answer_split_token, len(sub_table['rows']))
+                prompt += f" The answer should be a list split by '{answer_split_token}' and have {len(sub_table['rows'])} items in total."
 
         elif qa_type == "ans":
-            prompt += "Q: Answer question \"{}\" for the table.".format(question)
+            prompt += f'Q: Answer question \"{question}\" for the table.'
             prompt += " "
         else:
             raise ValueError("The QA type is not supported!")
 
         prompt += "\n"
-        if qa_type == "map":
-            if prompting_method == "basic":
-                prompt += "A:"
-        elif qa_type == "ans":
+        if (
+            qa_type != "ans"
+            and qa_type == "map"
+            and prompting_method == "basic"
+            or qa_type == "ans"
+        ):
             prompt += "A:"
-
         return prompt
 
     def qa(self, question, sub_tables, qa_type: str, verbose: bool = True, **args):

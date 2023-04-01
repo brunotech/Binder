@@ -17,8 +17,10 @@ class Question_Passage_Match_Classifier(object):
         for index, row in df.iterrows():
             qa = row['question'].lower()
             prediction = row['prediction']
-            qa_pairs_should_retrieve[qa] = True if prediction == "['yes']" else False
+            qa_pairs_should_retrieve[qa] = prediction == "['yes']"
         self.qa_pairs_should_retrieve = qa_pairs_should_retrieve
 
     def judge_match(self, question, passage):
-        return self.qa_pairs_should_retrieve['qa: {} \n {}'.format(question.lower(), passage.lower())]
+        return self.qa_pairs_should_retrieve[
+            f'qa: {question.lower()} \n {passage.lower()}'
+        ]

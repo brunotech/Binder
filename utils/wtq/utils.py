@@ -8,7 +8,7 @@ from utils.sql.all_keywords import ALL_KEY_WORDS
 
 class WTQDBEngine:
     def __init__(self, fdb):
-        self.db = records.Database('sqlite:///{}'.format(fdb))
+        self.db = records.Database(f'sqlite:///{fdb}')
         self.conn = self.db.get_connection()
 
     def execute_wtq_query(self, sql_query: str):
@@ -20,9 +20,7 @@ class WTQDBEngine:
         return merged_results
 
     def delete_rows(self, row_indices: List[int]):
-        sql_queries = [
-            "delete from w where id == {}".format(row) for row in row_indices
-        ]
+        sql_queries = [f"delete from w where id == {row}" for row in row_indices]
         for query in sql_queries:
             self.conn.query(query)
 
@@ -30,9 +28,7 @@ class WTQDBEngine:
 def process_table_structure(_wtq_table_content: Dict, _add_all_column: bool = False):
     # remove id and agg column
     headers = [_.replace("\n", " ").lower() for _ in _wtq_table_content["headers"][2:]]
-    header_map = {}
-    for i in range(len(headers)):
-        header_map["c" + str(i + 1)] = headers[i]
+    header_map = {f"c{str(i + 1)}": headers[i] for i in range(len(headers))}
     header_types = _wtq_table_content["types"][2:]
 
     all_headers = []
@@ -49,8 +45,10 @@ def process_table_structure(_wtq_table_content: Dict, _add_all_column: bool = Fa
                 vertical_content.append([str(_).replace("\n", " ").lower() for _ in column_content[i]["data"]])
                 if "_" in column_alias:
                     first_slash_pos = column_alias.find("_")
-                    column_name = header_map[column_alias[:first_slash_pos]] + " " + \
-                                  column_alias[first_slash_pos + 1:].replace("_", " ")
+                    column_name = (
+                        f"{header_map[column_alias[:first_slash_pos]]} "
+                        + column_alias[first_slash_pos + 1 :].replace("_", " ")
+                    )
                 else:
                     column_name = header_map[column_alias]
                 all_headers.append(column_name)
@@ -88,10 +86,10 @@ def retrieve_wtq_query_answer(_engine, _table_content, _sql_struct: List):
             keyword = str(_ex_tuple[1])
             # upper the keywords.
             if keyword in ALL_KEY_WORDS:
-                keyword = str(keyword).upper()
+                keyword = keyword.upper()
 
             # extra column, which we do not need in result
-            if keyword == "w" or keyword == "from":
+            if keyword in {"w", "from"}:
                 # add 'FROM w' make it executable
                 _encode_sql.append(keyword)
             elif re.fullmatch(r"c\d+(_.+)?", keyword):

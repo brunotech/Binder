@@ -22,7 +22,7 @@ class Question_Image_Match_Classifier(object):
         for index, row in df_qc.iterrows():
             _id = row['id']
             prediction = row['prediction']
-            whether_retrieve_image[_id] = True if prediction == "['yes']" else False
+            whether_retrieve_image[_id] = prediction == "['yes']"
         self.whether_retrieve_image = whether_retrieve_image
 
         df_qimc = pd.read_csv(os.path.join(ROOT_DIR, "utils", "mmqa", "qimc_mmqa_dev.csv"))
@@ -30,7 +30,7 @@ class Question_Image_Match_Classifier(object):
         for index, row in df_qimc.iterrows():
             qa = row['question'].lower()
             prediction = row['prediction']
-            qi_pairs_should_retrieve[qa] = True if prediction == "['yes']" else False
+            qi_pairs_should_retrieve[qa] = prediction == "['yes']"
         self.qi_pairs_should_retrieve = qi_pairs_should_retrieve
 
     def judge_match(self, _id, question, pic):
@@ -38,4 +38,6 @@ class Question_Image_Match_Classifier(object):
         if not self.whether_retrieve_image[_id]:
             return False
         image_caption = self.caption_info[os.path.split(pic)[-1].split(".")[0]]
-        return self.qi_pairs_should_retrieve['qa: {} \n{}'.format(question.lower(), image_caption.lower())]
+        return self.qi_pairs_should_retrieve[
+            f'qa: {question.lower()} \n{image_caption.lower()}'
+        ]

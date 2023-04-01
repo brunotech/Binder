@@ -38,7 +38,7 @@ def _load_table(table_path) -> dict:
 
     # Defense assertion
     for i in range(len(rows) - 1):
-        if not len(rows[i]) == len(rows[i - 1]):
+        if len(rows[i]) != len(rows[i - 1]):
             raise ValueError('some rows have diff cols.')
 
     return table_item
@@ -78,33 +78,35 @@ def majority_vote(
         """
         Compare prob sum.
         """
-        return 1 if sum([math.exp(nsql[1]) for nsql in a[1]['nsqls']]) > sum(
-            [math.exp(nsql[1]) for nsql in b[1]['nsqls']]) else -1
+        return (
+            1
+            if sum(math.exp(nsql[1]) for nsql in a[1]['nsqls'])
+            > sum(math.exp(nsql[1]) for nsql in b[1]['nsqls'])
+            else -1
+        )
 
     # Vote answers
-    candi_answer_dict = dict()
+    candi_answer_dict = {}
     for (nsql, logprob), pred_answer in zip(nsqls, pred_answer_list):
-        if allow_none_and_empty_answer:
-            if pred_answer == [None] or pred_answer == []:
-                pred_answer = [answer_placeholder]
-        if allow_error_answer:
-            if pred_answer == '<error>':
-                pred_answer = [answer_placeholder]
+        if allow_none_and_empty_answer and pred_answer in [[None], []]:
+            pred_answer = [answer_placeholder]
+        if allow_error_answer and pred_answer == '<error>':
+            pred_answer = [answer_placeholder]
 
         # Invalid execution results
-        if pred_answer == '<error>' or pred_answer == [None] or pred_answer == []:
+        if pred_answer in ['<error>', [None], []]:
             continue
         if candi_answer_dict.get(tuple(pred_answer), None) is None:
             candi_answer_dict[tuple(pred_answer)] = {
                 'count': 0,
                 'nsqls': []
             }
-        answer_info = candi_answer_dict.get(tuple(pred_answer), None)
+        answer_info = candi_answer_dict.get(tuple(pred_answer))
         answer_info['count'] += 1
         answer_info['nsqls'].append([nsql, logprob])
 
     # All candidates execution errors
-    if len(candi_answer_dict) == 0:
+    if not candi_answer_dict:
         return answer_placeholder, [(nsqls[0][0], nsqls[0][-1])]
 
     # Sort
@@ -147,8 +149,9 @@ def majority_vote(
 
 def load_data_split(dataset_to_load, split, data_dir=os.path.join(ROOT_DIR, 'datasets/')):
     dataset_split_loaded = load_dataset(
-        path=os.path.join(data_dir, "{}.py".format(dataset_to_load)),
-        cache_dir=os.path.join(data_dir, "data"))[split]
+        path=os.path.join(data_dir, f"{dataset_to_load}.py"),
+        cache_dir=os.path.join(data_dir, "data"),
+    )[split]
 
     # unify names of keys
     if dataset_to_load in ['wikitq', 'has_squall', 'missing_squall',

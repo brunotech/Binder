@@ -36,9 +36,6 @@ class Evaluator:
             # WikiTQ eval w. string normalization using recognizer
             pred = [str_normalize(span) for span in pred]
             gold = [str_normalize(span) for span in gold]
-            pred = to_value_list(pred)
-            gold = to_value_list(gold)
-            return check_denotation(pred, gold)
         else:
             assert isinstance(question, str)
             question = re.sub('\s+', ' ', question).strip().lower()
@@ -46,31 +43,28 @@ class Evaluator:
             gold = [str_normalize(span) for span in gold]
             pred = sorted(list(set(pred)))
             gold = sorted(list(set(gold)))
-            # (1) 0 matches 'no', 1 matches 'yes'; 0 matches 'more', 1 matches 'less', etc.
             if len(pred) == 1 and len(gold) == 1:
                 if (pred[0] == '0' and gold[0] == 'no') \
-                        or (pred[0] == '1' and gold[0] == 'yes'):
+                            or (pred[0] == '1' and gold[0] == 'yes'):
                     return True
                 question_tokens = question.split()
                 try:
                     pos_or = question_tokens.index('or')
                     token_before_or, token_after_or = question_tokens[pos_or - 1], question_tokens[pos_or + 1]
                     if (pred[0] == '0' and gold[0] == token_after_or) \
-                            or (pred[0] == '1' and gold[0] == token_before_or):
+                                or (pred[0] == '1' and gold[0] == token_before_or):
                         return True
                 except Exception as e:
                     pass
-            # (2) Number value (allow units) and Date substring match
-            if len(pred) == 1 and len(gold) == 1:
                 NUMBER_UNITS_PATTERN = re.compile('^\$*[+-]?([0-9]*[.])?[0-9]+(\s*%*|\s+\w+)$')
                 DATE_PATTERN = re.compile('[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}\s*([0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2})?')
                 DURATION_PATTERN = re.compile('(P|PT)(\d+)(Y|M|D|H|S)')
                 p, g = pred[0], gold[0]
                 # Restore `duration` type, e.g., from 'P3Y' -> '3'
                 if re.match(DURATION_PATTERN, p):
-                    p = re.match(DURATION_PATTERN, p).group(2)
+                    p = re.match(DURATION_PATTERN, p)[2]
                 if re.match(DURATION_PATTERN, g):
-                    g = re.match(DURATION_PATTERN, g).group(2)
+                    g = re.match(DURATION_PATTERN, g)[2]
                 match = False
                 num_flag, date_flag = False, False
                 # Number w. unit match after string normalization.
@@ -91,9 +85,10 @@ class Evaluator:
                         match = True
                 if match:
                     return True
-            pred = to_value_list(pred)
-            gold = to_value_list(gold)
-            return check_denotation(pred, gold)
+
+        pred = to_value_list(pred)
+        gold = to_value_list(gold)
+        return check_denotation(pred, gold)
 
     def eval_tabfact_match(self, pred, gold):
         if isinstance(pred, list):

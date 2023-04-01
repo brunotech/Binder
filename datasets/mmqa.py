@@ -186,10 +186,6 @@ class MMQA(datasets.GeneratorBasedBuilder):
             for idx, line in enumerate(f):
                 example = json.loads(line)
                 count += 1
-                example_table = []
-                example_images = []
-                example_texts = []
-
                 # load table
                 table_id = example['metadata']['table_id']
                 rows_with_links = []
@@ -203,29 +199,30 @@ class MMQA(datasets.GeneratorBasedBuilder):
                             url.append(link['url'])
                         rows_with_links[-1].append([text, title, url])
 
-                example_table.append({
-                    "table_id": table_id,
-                    "title": tables[table_id]["title"],
-                    "caption": tables[table_id]["table"]["table_name"],
-                    "header": [column["column_name"] for column in tables[table_id]["table"]["header"]],
-                    "rows": [[cell["text"] for cell in row] for row in tables[table_id]["table"]["table_rows"]],
-                    "rows_with_links": rows_with_links
-                })
-
-                # load image_docs
-                for image_doc_id in example['metadata']['image_doc_ids']:
-                    example_images.append(mmqa_images[image_doc_id])
-
-                # load text_docs
-                for text_doc_id in example['metadata']['text_doc_ids']:
-                    # {
-                    #   "title": "Hillaryland",
-                    #   "url": "https://en.wikipedia.org/wiki/Hillaryland",
-                    #   "id": "a7d9e6350bafc46b700e4d0739a39594",
-                    #   "text": "Hillaryland was the self-designated name of a group of core advisors to Hillary Clinton, when she was First Lady of the United States and again when, as United States Senator, she was one of the Democratic Party candidates for President in the 2008 U.S. election."
-                    # }
-                    example_texts.append(texts[text_doc_id])
-
+                example_table = [
+                    {
+                        "table_id": table_id,
+                        "title": tables[table_id]["title"],
+                        "caption": tables[table_id]["table"]["table_name"],
+                        "header": [
+                            column["column_name"]
+                            for column in tables[table_id]["table"]["header"]
+                        ],
+                        "rows": [
+                            [cell["text"] for cell in row]
+                            for row in tables[table_id]["table"]["table_rows"]
+                        ],
+                        "rows_with_links": rows_with_links,
+                    }
+                ]
+                example_images = [
+                    mmqa_images[image_doc_id]
+                    for image_doc_id in example['metadata']['image_doc_ids']
+                ]
+                example_texts = [
+                    texts[text_doc_id]
+                    for text_doc_id in example['metadata']['text_doc_ids']
+                ]
                 if split in ['train', 'validation']:
                     yield count, {
                         "id": example["qid"],

@@ -34,14 +34,14 @@ def worker_annotate(
     """
     qpmc = Question_Passage_Match_Classifier()
     qimc = Question_Image_Match_Classifier()
-    g_dict = dict()
+    g_dict = {}
     built_few_shot_prompts = []
     for g_eid in g_eids:
         try:
             g_data_item = dataset[g_eid]
             g_dict[g_eid] = {
-                'generations': dict(),
-                'ori_data_item': copy.deepcopy(g_data_item)
+                'generations': {},
+                'ori_data_item': copy.deepcopy(g_data_item),
             }
             table = g_data_item['table']
             header, rows, rows_with_links = table['header'][0], table['rows'][0], table['rows_with_links'][0]
@@ -82,15 +82,34 @@ def worker_annotate(
             else:
                 assert args.prompt_style == "create_table_select_3_full_table_w_gold_passage_image"
 
-            db = NeuralDB([{
-                "title": "{} ({})".format(table['title'][0], table['caption'][0]),
-                "table": {"header": header, "rows": rows, "rows_with_links": rows_with_links}
-            }],
-                passages=[{"id": _id, "title": title, "text": text} for _id, title, text in
-                          zip(g_data_item['passages']['id'], g_data_item['passages']['title'],
-                              g_data_item['passages']['text'])],
-                images=[{"id": _id, "title": title, "pic": pic} for _id, title, pic in
-                        zip(g_data_item['images']['id'], g_data_item['images']['title'], g_data_item['images']['pic'])])
+            db = NeuralDB(
+                [
+                    {
+                        "title": f"{table['title'][0]} ({table['caption'][0]})",
+                        "table": {
+                            "header": header,
+                            "rows": rows,
+                            "rows_with_links": rows_with_links,
+                        },
+                    }
+                ],
+                passages=[
+                    {"id": _id, "title": title, "text": text}
+                    for _id, title, text in zip(
+                        g_data_item['passages']['id'],
+                        g_data_item['passages']['title'],
+                        g_data_item['passages']['text'],
+                    )
+                ],
+                images=[
+                    {"id": _id, "title": title, "pic": pic}
+                    for _id, title, pic in zip(
+                        g_data_item['images']['id'],
+                        g_data_item['images']['title'],
+                        g_data_item['images']['pic'],
+                    )
+                ],
+            )
             g_data_item['table'] = db.get_table_df()
             g_data_item['title'] = db.get_table_title()
 
@@ -176,7 +195,7 @@ def main():
     for g_eid in generate_eids:
         generate_eids_group[int(g_eid) % args.n_processes].append(g_eid)
     print('\n******* Annotating *******')
-    g_dict = dict()
+    g_dict = {}
     worker_results = []
     pool = multiprocessing.Pool(processes=args.n_processes)
     for pid in range(args.n_processes):
@@ -194,7 +213,7 @@ def main():
     # Merge annotation results
     for r in worker_results:
         worker_g_dict = r.get()
-        g_dict.update(worker_g_dict)
+        g_dict |= worker_g_dict
     pool.close()
     pool.join()
 
@@ -256,6 +275,6 @@ if __name__ == '__main__':
     args.stop_tokens = args.stop_tokens.split('||')
     print("Args info:")
     for k in args.__dict__:
-        print(k + ": " + str(args.__dict__[k]))
+        print(f"{k}: {str(args.__dict__[k])}")
 
     main()

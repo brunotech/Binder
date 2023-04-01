@@ -22,7 +22,4 @@ def get_caption(id):
     """
     with open(os.path.join(ROOT_DIR, 'utils', 'mmqa', "mmqa_captions.json"), "r") as f:
         caption = json.load(f)
-    if id in caption.keys():
-        return caption[id]
-    else:
-        return ""
+    return caption[id] if id in caption.keys() else ""
